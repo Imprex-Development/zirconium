@@ -7,6 +7,7 @@
 	<packaging>jar</packaging>
 
 	<properties>
+		<dependency.bukkit.version>1.19.2-R0.1-SNAPSHOT</dependency.bukkit.version>
 		<maven.compiler.source>17</maven.compiler.source>
 		<maven.compiler.target>17</maven.compiler.target>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -23,7 +24,7 @@
 		<dependency>
 			<groupId>org.spigotmc</groupId>
 			<artifactId>spigot</artifactId>
-			<version>1.19.2-R0.1-SNAPSHOT</version>
+			<version>${dependency.bukkit.version}</version>
 			<classifier>remapped-mojang</classifier>
 			<scope>provided</scope>
 		</dependency>
@@ -64,39 +65,49 @@
 					</relocations>
 				</configuration>
 			</plugin>
-			<plugin>
-				<groupId>net.md-5</groupId>
-				<artifactId>specialsource-maven-plugin</artifactId>
-				<version>1.2.3</version>
-				<executions>
-					<execution>
-						<phase>package</phase>
-						<goals>
-							<goal>remap</goal>
-						</goals>
-						<id>remap-obf</id>
-						<configuration>
-							<srgIn>org.spigotmc:minecraft-server:${dependency.bukkit.version}:txt:maps-mojang</srgIn>
-							<reverse>true</reverse>
-							<remappedDependencies>org.spigotmc:spigot:${dependency.bukkit.version}:jar:remapped-mojang</remappedDependencies>
-							<remappedArtifactAttached>true</remappedArtifactAttached>
-							<remappedClassifierName>remapped-obf</remappedClassifierName>
-						</configuration>
-					</execution>
-					<execution>
-						<phase>package</phase>
-						<goals>
-							<goal>remap</goal>
-						</goals>
-						<id>remap-spigot</id>
-						<configuration>
-							<inputFile>${project.build.directory}/${project.artifactId}-${project.version}-remapped-obf.jar</inputFile>
-							<srgIn>org.spigotmc:minecraft-server:${dependency.bukkit.version}:csrg:maps-spigot</srgIn>
-							<remappedDependencies>org.spigotmc:spigot:${dependency.bukkit.version}:jar:remapped-obf</remappedDependencies>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<profile>
+			<id>remap</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>net.md-5</groupId>
+						<artifactId>specialsource-maven-plugin</artifactId>
+						<version>1.2.3</version>
+						<executions>
+							<execution>
+								<phase>package</phase>
+								<goals>
+									<goal>remap</goal>
+								</goals>
+								<id>remap-obf</id>
+								<configuration>
+									<srgIn>org.spigotmc:minecraft-server:${dependency.bukkit.version}:txt:maps-mojang</srgIn>
+									<reverse>true</reverse>
+									<remappedDependencies>org.spigotmc:spigot:${dependency.bukkit.version}:jar:remapped-mojang</remappedDependencies>
+									<remappedArtifactAttached>true</remappedArtifactAttached>
+									<remappedClassifierName>remapped-obf</remappedClassifierName>
+								</configuration>
+							</execution>
+							<execution>
+								<phase>package</phase>
+								<goals>
+									<goal>remap</goal>
+								</goals>
+								<id>remap-spigot</id>
+								<configuration>
+									<inputFile>${project.build.directory}/${project.artifactId}-${project.version}-remapped-obf.jar</inputFile>
+									<srgIn>org.spigotmc:minecraft-server:${dependency.bukkit.version}:csrg:maps-spigot</srgIn>
+									<remappedDependencies>org.spigotmc:spigot:${dependency.bukkit.version}:jar:remapped-obf</remappedDependencies>
+								</configuration>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
 </project>
