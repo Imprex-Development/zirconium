@@ -52,10 +52,8 @@ public class Zirconium {
 		}
 
 		try (PluginContext pluginContext = PluginContext.create(plugin)) {
-			pluginContext.visit((context, entry) -> {
-				this.font.visit(pluginContext, entry);
-				this.language.visit(pluginContext, entry);
-			});
+			pluginContext.visit(this.font);
+			pluginContext.visit(this.language);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}

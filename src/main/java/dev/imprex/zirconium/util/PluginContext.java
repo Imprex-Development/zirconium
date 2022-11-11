@@ -4,7 +4,9 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
@@ -42,6 +44,9 @@ public class PluginContext implements AutoCloseable {
 	private final ZipFile zipFile;
 	private boolean closed = false;
 
+	private final List<ZipEntry> zipEntries = new ArrayList<>();
+	private boolean initialized = false;
+
 	private PluginContext(JavaPlugin plugin) throws Exception {
 		this.plugin = plugin;
 		this.pluginFile = (File) JAVA_PLUGIN_GET_FILE.invoke(plugin);
@@ -69,14 +74,22 @@ public class PluginContext implements AutoCloseable {
 	}
 
 	public void visit(PluginFileVisitor visitor) throws IOException {
-		Enumeration<? extends ZipEntry> zipEntries = zipFile.entries();
-		while (zipEntries.hasMoreElements()) {
-			ZipEntry zipEntry = zipEntries.nextElement();
-			if (!zipEntry.getName().startsWith("assets/")) {
-				continue;
+		if (this.initialized) {
+			for (ZipEntry zipEntry : this.zipEntries) {
+				visitor.visit(this, zipEntry);
 			}
+		} else {
+			Enumeration<? extends ZipEntry> zipEntries = zipFile.entries();
+			while (zipEntries.hasMoreElements()) {
+				ZipEntry zipEntry = zipEntries.nextElement();
+				if (!zipEntry.getName().startsWith("assets/")) {
+					continue;
+				}
 
-			visitor.visit(this, zipEntry);
+				visitor.visit(this, zipEntry);
+				this.zipEntries.add(zipEntry);
+			}
+			this.initialized = true;
 		}
 	}
 

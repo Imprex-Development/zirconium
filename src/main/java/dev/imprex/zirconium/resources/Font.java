@@ -18,6 +18,8 @@ import java.util.zip.ZipEntry;
 
 import javax.imageio.ImageIO;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.bukkit.NamespacedKey;
 
 import com.google.gson.reflect.TypeToken;
@@ -32,6 +34,8 @@ import net.minecraft.network.chat.Style;
 import net.minecraft.resources.ResourceLocation;
 
 public class Font implements PluginFileVisitor {
+
+	private static final Logger LOGGER = LogManager.getLogger(Font.class);
 
 	public static final Style CONTAINER_STYLE = Style.EMPTY
 			.withFont(new ResourceLocation("minecraft", "default"))
@@ -113,7 +117,11 @@ public class Font implements PluginFileVisitor {
 	}
 
 	public Glyph getGlyph(NamespacedKey key) {
-		return this.glyphs.get(key);
+		Glyph glyph = this.glyphs.get(key);
+		if (glyph == null) {
+			throw new NullPointerException("can't find glyph: " + key);
+		}
+		return glyph;
 	}
 
 	public BaseComponent getComponent(NamespacedKey key) {
@@ -145,6 +153,8 @@ public class Font implements PluginFileVisitor {
 		} else if (!entry.getName().endsWith(".font.json")) {
 			return;
 		}
+
+		LOGGER.info("found font file {} in {}", entry.getName(), context.getPlugin().getName());
 
 		try (InputStream inputStream = context.getInputStream(entry)) {
 			Type listType = new TypeToken<List<Texture>>() {

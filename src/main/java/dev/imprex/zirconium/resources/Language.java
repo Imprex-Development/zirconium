@@ -74,6 +74,8 @@ public class Language implements PluginFileVisitor {
 			return;
 		}
 
+		LOGGER.info("found language file {} in {}", entry.getName(), context.getPlugin().getName());
+
 		try (InputStream inputStream = context.getInputStream(entry)) {
 			JsonObject root = (JsonObject) JsonParser.parseReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
 
