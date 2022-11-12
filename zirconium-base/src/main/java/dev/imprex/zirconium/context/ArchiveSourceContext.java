@@ -27,7 +27,7 @@ public class ArchiveSourceContext implements SourceContext, AutoCloseable {
 	private final ZipFile zipFile;
 	private final Map<Path, ZipEntry> zipEntries = new LinkedHashMap<>();
 
-	private final AtomicBoolean open = new AtomicBoolean();
+	private final AtomicBoolean open = new AtomicBoolean(true);
 
 	protected ArchiveSourceContext(File file) throws IOException {
 		this.file = file;
