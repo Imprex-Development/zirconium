@@ -37,7 +37,7 @@ public class Language implements SourceContextFileVisitor {
 	private final Font font;
 
 	private final Set<String> languageCodes = new HashSet<>();
-	private final Map<String, JsonObject> languages = new HashMap<>();
+	private final Map<String, Map<String, Translation>> languages = new HashMap<>();
 
 	private boolean finalized = false;
 
@@ -46,7 +46,8 @@ public class Language implements SourceContextFileVisitor {
 		this.font = font;
 
 		try (InputStream inputStream = getClass().getResourceAsStream("/assets/lang_codes.json")) {
-			JsonArray root = (JsonArray) JsonParser.parseReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
+			JsonArray root = (JsonArray) JsonParser
+					.parseReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
 			for (JsonElement element : root) {
 				this.languageCodes.add(element.getAsString());
 			}
@@ -61,8 +62,12 @@ public class Language implements SourceContextFileVisitor {
 		}
 		this.finalized = true;
 
-		for (Map.Entry<String, JsonObject> language : this.languages.entrySet()) {
-			this.resourcePackBuilder.write(getPath(language.getKey()), language.getValue());
+		for (Map.Entry<String, Map<String, Translation>> language : this.languages.entrySet()) {
+			JsonObject root = new JsonObject();
+			for (Map.Entry<String, Translation> translation : language.getValue().entrySet()) {
+				root.addProperty(translation.getKey(), translation.getValue().translation());
+			}
+			this.resourcePackBuilder.write(getPath(language.getKey()), root);
 		}
 	}
 
@@ -77,13 +82,14 @@ public class Language implements SourceContextFileVisitor {
 		LOGGER.info("found language file {} in {}", path, context);
 
 		try (InputStream inputStream = context.getInputStream(path)) {
-			JsonObject root = (JsonObject) JsonParser.parseReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
+			JsonObject root = (JsonObject) JsonParser
+					.parseReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
 
 			// copy common to all possible languages
 			JsonObject common = root.remove("common").getAsJsonObject();
 			if (common != null) {
 				for (String languageCode : this.languageCodes) {
-					mergeTranslations(context, languageCode, common);
+					mergeTranslations(context, languageCode, common, true);
 				}
 			}
 
@@ -93,7 +99,7 @@ public class Language implements SourceContextFileVisitor {
 					LOGGER.warn("unknown language code {} in plugin {}", languageCode, context);
 					continue;
 				}
-				mergeTranslations(context, languageCode, root.getAsJsonObject(languageCode));
+				mergeTranslations(context, languageCode, root.getAsJsonObject(languageCode), false);
 			}
 		}
 	}
@@ -101,26 +107,28 @@ public class Language implements SourceContextFileVisitor {
 	/**
 	 * Merges already defined translations with the given translations object
 	 */
-	private void mergeTranslations(SourceContext context, String languageCode, JsonObject translations) {
-		JsonObject language = this.languages.get(languageCode);
+	private void mergeTranslations(SourceContext context, String languageCode, JsonObject translations, boolean common) {
+		Map<String, Translation> language = this.languages.get(languageCode);
 		if (language == null) {
-			language = new JsonObject();
+			language = new HashMap<>();
 			this.languages.put(languageCode, language);
 		}
 
 		for (String key : translations.keySet()) {
-			if (language.has(key)) {
+			Translation translation = language.get(key);
+			if (translation != null && !translation.common()) {
 				LOGGER.warn("{} defined duplicate translation key {} for {}", context, key, languageCode);
 				continue;
 			}
 
 			String value = translations.get(key).getAsString();
-			language.addProperty(key, this.transformTranslation(value));
+			language.put(key, new Translation(common, this.transformTranslation(value)));
 		}
 	}
 
 	/**
-	 * Replaces {{namespace:key}} with the glyph string and {{offset}} with an offset string
+	 * Replaces {{namespace:key}} with the glyph string and {{offset}} with an
+	 * offset string
 	 */
 	private String transformTranslation(String value) {
 		StringBuilder builder = new StringBuilder();
@@ -142,5 +150,8 @@ public class Language implements SourceContextFileVisitor {
 		matcher.appendTail(builder);
 
 		return builder.toString();
+	}
+
+	private record Translation(boolean common, String translation) {
 	}
 }
