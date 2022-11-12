@@ -4,13 +4,13 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.zip.ZipEntry;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -20,11 +20,11 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
+import dev.imprex.zirconium.context.SourceContext;
+import dev.imprex.zirconium.context.SourceContextFileVisitor;
 import dev.imprex.zirconium.resources.Font.Glyph;
-import dev.imprex.zirconium.util.PluginContext;
-import dev.imprex.zirconium.util.PluginFileVisitor;
 
-public class Language implements PluginFileVisitor {
+public class Language implements SourceContextFileVisitor {
 
 	private static final Logger LOGGER = LogManager.getLogger(Language.class);
 	private static final Pattern NAMESPACE_PATTERN = Pattern.compile("\\{\\{([^\\{\\}]+)\\}\\}");
@@ -67,16 +67,16 @@ public class Language implements PluginFileVisitor {
 	}
 
 	@Override
-	public void visit(PluginContext context, ZipEntry entry) throws IOException {
+	public void visit(SourceContext context, Path path) throws IOException {
 		if (this.finalized) {
 			throw new IllegalStateException("already finalized!");
-		} else if (!entry.getName().endsWith(".lang.json")) {
+		} else if (!path.toString().endsWith(".lang.json")) {
 			return;
 		}
 
-		LOGGER.info("found language file {} in {}", entry.getName(), context.getPlugin().getName());
+		LOGGER.info("found language file {} in {}", path, context);
 
-		try (InputStream inputStream = context.getInputStream(entry)) {
+		try (InputStream inputStream = context.getInputStream(path)) {
 			JsonObject root = (JsonObject) JsonParser.parseReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
 
 			// copy common to all possible languages
@@ -90,7 +90,7 @@ public class Language implements PluginFileVisitor {
 			// copy each language only if the languageCode is supported
 			for (String languageCode : root.keySet()) {
 				if (!this.languageCodes.contains(languageCode)) {
-					LOGGER.warn("unknown language code {} in plugin {}", languageCode, context.getPlugin().getName());
+					LOGGER.warn("unknown language code {} in plugin {}", languageCode, context);
 					continue;
 				}
 				mergeTranslations(context, languageCode, root.getAsJsonObject(languageCode));
@@ -101,7 +101,7 @@ public class Language implements PluginFileVisitor {
 	/**
 	 * Merges already defined translations with the given translations object
 	 */
-	private void mergeTranslations(PluginContext context, String languageCode, JsonObject translations) {
+	private void mergeTranslations(SourceContext context, String languageCode, JsonObject translations) {
 		JsonObject language = this.languages.get(languageCode);
 		if (language == null) {
 			language = new JsonObject();
@@ -110,8 +110,7 @@ public class Language implements PluginFileVisitor {
 
 		for (String key : translations.keySet()) {
 			if (language.has(key)) {
-				LOGGER.warn("{} defined duplicate translation key {} for {}",
-						context.getPlugin().getName(), key, languageCode);
+				LOGGER.warn("{} defined duplicate translation key {} for {}", context, key, languageCode);
 				continue;
 			}
 

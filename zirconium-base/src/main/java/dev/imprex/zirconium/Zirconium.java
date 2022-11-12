@@ -2,16 +2,16 @@ package dev.imprex.zirconium;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import org.bukkit.Bukkit;
-import org.bukkit.plugin.Plugin;
-
+import dev.imprex.zirconium.context.ArchiveSourceContext;
+import dev.imprex.zirconium.context.DirectorySourceContext;
+import dev.imprex.zirconium.context.SourceContext;
 import dev.imprex.zirconium.resources.Font;
 import dev.imprex.zirconium.resources.Language;
 import dev.imprex.zirconium.resources.ResourcePackBuilder;
 import dev.imprex.zirconium.resources.ResourcePackBuilder.ResourcePack;
-import dev.imprex.zirconium.util.PluginContext;
 import dev.imprex.zirconium.util.ResourcePackServer;
 import net.md_5.bungee.api.chat.TextComponent;
 
@@ -27,15 +27,18 @@ public class Zirconium {
 
 	private boolean finalized = false;
 
+	public ResourcePack getResourcePack() {
+		return resourcePack;
+	}
+
 	public Font getFont() {
 		return font;
 	}
 
-	public void startResourcePackServer(Plugin plugin, int port) {
+	public void startResourcePackServer(int port) {
 		if (!this.finalized) {
 			throw new IllegalStateException("not finalized yet!");
 		}
-		Bukkit.getPluginManager().registerEvents(new PlayerListener(this.resourcePack, port), plugin);
 		this.resourcePackServer = new ResourcePackServer(this.resourcePack, port);
 	}
 
@@ -46,17 +49,29 @@ public class Zirconium {
 		}
 	}
 
-	public void register(Plugin plugin) {
+	public void registerDirectory(Path path) {
+		try {
+			this.register(DirectorySourceContext.create(path));
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	public void registerArchive(Path path) {
+		try (ArchiveSourceContext context = ArchiveSourceContext.create(path)) {
+			this.register(context);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+	}
+
+	protected void register(SourceContext context) throws IOException {
 		if (this.finalized) {
 			throw new IllegalStateException("already finalized!");
 		}
 
-		try (PluginContext pluginContext = PluginContext.create(plugin)) {
-			pluginContext.visit(this.font);
-			pluginContext.visit(this.language);
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
+		context.visit(this.font);
+		context.visit(this.language);
 	}
 
 	public void finalizeResourcePack() {
@@ -69,7 +84,7 @@ public class Zirconium {
 			this.font.finalizeFont();
 			this.language.finalizeLanguage();
 
-			this.resourcePackBuilder.writeMetadata(9, TextComponent.fromLegacyText("Â§lÂ§8[Â§rZirconiumÂ§lÂ§8] Â§rÂ§7Server-Pack"));
+			this.resourcePackBuilder.writeMetadata(9, TextComponent.fromLegacyText("§l§8[§rZirconium§l§8] §r§7Server-Pack"));
 
 			ResourcePack resourcePack = this.resourcePackBuilder.build();
 			Files.write(Paths.get("debug.zip"), resourcePack.data());

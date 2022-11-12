@@ -8,38 +8,32 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.lang.reflect.Type;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
-import java.util.zip.ZipEntry;
 
 import javax.imageio.ImageIO;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.bukkit.NamespacedKey;
 
 import com.google.gson.reflect.TypeToken;
 
+import dev.imprex.zirconium.context.SourceContext;
+import dev.imprex.zirconium.context.SourceContextFileVisitor;
 import dev.imprex.zirconium.util.GsonHelper;
-import dev.imprex.zirconium.util.PluginContext;
-import dev.imprex.zirconium.util.PluginFileVisitor;
+import dev.imprex.zirconium.util.ResourceKey;
 import net.md_5.bungee.api.chat.BaseComponent;
 import net.md_5.bungee.api.chat.TextComponent;
-import net.minecraft.ChatFormatting;
-import net.minecraft.network.chat.Style;
-import net.minecraft.resources.ResourceLocation;
 
-public class Font implements PluginFileVisitor {
+public class Font implements SourceContextFileVisitor {
 
 	private static final Logger LOGGER = LogManager.getLogger(Font.class);
-
-	public static final Style CONTAINER_STYLE = Style.EMPTY
-			.withFont(new ResourceLocation("minecraft", "default"))
-			.withColor(ChatFormatting.WHITE);
 
 	private static final int MAX_OFFSET = 1023;
 	private static final int OFFSET_BITS = 32 - Integer.numberOfLeadingZeros(MAX_OFFSET);
@@ -83,7 +77,7 @@ public class Font implements PluginFileVisitor {
 	private final ResourcePackBuilder resourcePackBuilder;
 
 	private final List<GlyphProvider> glyphProviders = new ArrayList<>();
-	private final Map<NamespacedKey, Glyph> glyphs = new HashMap<>();
+	private final Map<ResourceKey, Glyph> glyphs = new HashMap<>();
 
 	private char nextCharacter = '\uE040';
 	private boolean finalized = false;
@@ -113,10 +107,10 @@ public class Font implements PluginFileVisitor {
 	}
 
 	public Glyph getGlyph(String key) {
-		return getGlyph(NamespacedKey.fromString(key));
+		return getGlyph(ResourceKey.fromString(key));
 	}
 
-	public Glyph getGlyph(NamespacedKey key) {
+	public Glyph getGlyph(ResourceKey key) {
 		Glyph glyph = this.glyphs.get(key);
 		if (glyph == null) {
 			throw new NullPointerException("can't find glyph: " + key);
@@ -124,11 +118,11 @@ public class Font implements PluginFileVisitor {
 		return glyph;
 	}
 
-	public BaseComponent getComponent(NamespacedKey key) {
+	public BaseComponent getComponent(ResourceKey key) {
 		return getComponent(key, 0);
 	}
 
-	public BaseComponent getComponent(NamespacedKey key, int offse) {
+	public BaseComponent getComponent(ResourceKey key, int offse) {
 		Glyph glyph = Objects.requireNonNull(getGlyph(key), key.toString());
 
 		BaseComponent component = new TextComponent(glyph.character + getOffsetString(offse));
@@ -143,38 +137,37 @@ public class Font implements PluginFileVisitor {
 		
 		this.finalized = true;
 		this.resourcePackBuilder.writeFont("assets/minecraft/font/default.json", this.glyphProviders);
-		System.out.println(this.glyphs.keySet().stream().map(NamespacedKey::toString).collect(Collectors.joining("\n")));
+		System.out.println(this.glyphs.keySet().stream().map(ResourceKey::toString).collect(Collectors.joining("\n")));
 	}
 
 	@Override
-	public void visit(PluginContext context, ZipEntry entry) throws IOException {
+	public void visit(SourceContext context, Path path) throws IOException {
 		if (this.finalized) {
 			throw new IllegalStateException("already finalized!");
-		} else if (!entry.getName().endsWith(".font.json")) {
+		} else if (!path.toString().endsWith(".font.json")) {
 			return;
 		}
 
-		LOGGER.info("found font file {} in {}", entry.getName(), context.getPlugin().getName());
+		LOGGER.info("found font file {} in {}", path, context);
 
-		try (InputStream inputStream = context.getInputStream(entry)) {
+		try (InputStream inputStream = context.getInputStream(path)) {
 			Type listType = new TypeToken<List<Texture>>() {
 			}.getType();
 			List<Texture> json = GsonHelper.GSON.fromJson(new InputStreamReader(inputStream, StandardCharsets.UTF_8), listType);
 			for (Texture texture : json) {
 
-				String textureFile = getPath(texture.file);
-				ZipEntry textureEntry = context.getEntry(textureFile);
-				if (textureEntry == null) {
+				Path textureFile = getPath(texture.file);
+				if (!context.has(textureFile)) {
 					new IOException("can't find texture file: " + textureFile).printStackTrace();
 					continue;
 				}
 
-				try (InputStream textureStream = context.getInputStream(textureEntry)) {
+				try (InputStream textureStream = context.getInputStream(textureFile)) {
 					BufferedImage image = ImageIO.read(textureStream);
 		
-					String path = getPath(texture.file);
-					if (!this.resourcePackBuilder.hasEntry(path)) {
-						this.resourcePackBuilder.write(path, image);
+					String resourcePackPath = textureFile.toString();
+					if (!this.resourcePackBuilder.hasEntry(resourcePackPath)) {
+						this.resourcePackBuilder.write(resourcePackPath, image);
 					}
 
 					this.registerTexture(texture, image);
@@ -183,8 +176,8 @@ public class Font implements PluginFileVisitor {
 		}
 	}
 
-	private static String getPath(NamespacedKey key) {
-		return String.format("assets/%s/textures/%s", key.getNamespace(), key.getKey());
+	private static Path getPath(ResourceKey key) {
+		return Paths.get(String.format("assets/%s/textures/%s", key.getNamespace(), key.getKey()));
 	}
 
 	private void registerTexture(Texture texture, BufferedImage image) {
@@ -236,7 +229,7 @@ public class Font implements PluginFileVisitor {
 				String glyphString = getGlyphString(glyphCharacters);
 
 				Glyph glyph = new Glyph(glyphString, glyphWidth, texture.height, texture.ascent);
-				NamespacedKey name = NamespacedKey.fromString(texture.name + "/" + texture.grid[rowIndex][columnIndex]);
+				ResourceKey name = ResourceKey.fromString(texture.name + "/" + texture.grid[rowIndex][columnIndex]);
 
 				row.append(glyphCharacters);
 				this.glyphs.put(name, glyph);
@@ -310,8 +303,8 @@ public class Font implements PluginFileVisitor {
 
 	private class Texture {
 
-		public NamespacedKey name;
-		public NamespacedKey file;
+		public ResourceKey name;
+		public ResourceKey file;
 
 		public int ascent;
 		public int height;

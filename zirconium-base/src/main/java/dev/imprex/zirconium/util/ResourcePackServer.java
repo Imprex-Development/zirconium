@@ -34,7 +34,7 @@ public class ResourcePackServer extends SimpleChannelInboundHandler<FullHttpRequ
 	private Channel channel;
 
 	public ResourcePackServer(ResourcePack resourcePack, int port) {
-		this.resourcePack = resourcePack;
+		this.resourcePack = resourcePack;	
 
 		this.channel = new ServerBootstrap()
 				.group(new NioEventLoopGroup(1, new DefaultThreadFactory("resource-pack-server", true)))

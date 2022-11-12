@@ -8,12 +8,12 @@ import org.bukkit.event.player.PlayerJoinEvent;
 
 import dev.imprex.zirconium.resources.ResourcePackBuilder.ResourcePack;
 
-public class PlayerListener implements Listener {
+public class ZirconiumListener implements Listener {
 
 	private final ResourcePack resourcePack;
 	private final int port;
 
-	public PlayerListener(ResourcePack resourcePack, int port) {
+	public ZirconiumListener(ResourcePack resourcePack, int port) {
 		this.resourcePack = resourcePack;
 		this.port = port;
 	}
