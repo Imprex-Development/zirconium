@@ -17,6 +17,7 @@
 
 		<project.version.source>17</project.version.source>
 		<project.version.target>17</project.version.target>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
 		<dependency.bungee.version>1.19-R0.1-SNAPSHOT</dependency.bungee.version>
 		<dependency.bukkit.version>1.19.2-R0.1-SNAPSHOT</dependency.bukkit.version>
