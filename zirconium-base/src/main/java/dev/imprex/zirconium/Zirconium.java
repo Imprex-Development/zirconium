@@ -86,8 +86,7 @@ public class Zirconium {
 			this.font.finalizeFont();
 			this.language.finalizeLanguage();
 
-			this.resourcePackBuilder.writeMetadata(22, TextComponent
-					.fromLegacyText("\u00A7l\u00A78[\u00A7rZirconium\u00A7l\u00A78] \u00A7r\u00A77Server-Pack"));
+			this.resourcePackBuilder.writeMetadata(9, TextComponent.fromLegacyText("§l§8[§rZirconium§l§8] §r§7Server-Pack"));
 
 			ResourcePack resourcePack = this.resourcePackBuilder.build();
 			Files.write(Paths.get("debug.zip"), resourcePack.data());
