@@ -1,17 +1,21 @@
 package dev.imprex.zirconium.resources;
 
-import java.awt.image.BufferedImage;
+import java.awt.image.RenderedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import javax.imageio.ImageIO;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import com.google.common.hash.HashCode;
 import com.google.common.hash.Hashing;
@@ -20,15 +24,22 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import dev.imprex.zirconium.util.GsonHelper;
+import dev.imprex.zirconium.util.ResourcePath;
 import net.md_5.bungee.api.chat.BaseComponent;
 import net.md_5.bungee.chat.ComponentSerializer;
 
 public class ResourcePackBuilder {
 
-	private final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-	private final ZipOutputStream outputStream = new ZipOutputStream(byteArrayOutputStream);
+	private static final Logger LOGGER = LogManager.getLogger(ResourcePackBuilder.class);
 
-	private final Set<String> entries = new HashSet<>();
+	private static String path(ResourcePath resourceKey) {
+		return String.format("assets/%s/%s", resourceKey.namespace(), resourceKey.path());
+	}
+
+	private final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+	private final ZipOutputStream outputStream = new ZipOutputStream(byteArrayOutputStream, StandardCharsets.UTF_8);
+
+	private final Set<ResourcePath> entries = new HashSet<>();
 
 	private boolean open = true;
 
@@ -38,41 +49,43 @@ public class ResourcePackBuilder {
 		}
 	}
 
-	public boolean hasEntry(String path) {
-		return this.entries.contains(path);
-	}
+	public void write(ResourcePath resourcePath, Object data) throws IOException {
+		Objects.requireNonNull(resourcePath);
+		Objects.requireNonNull(data);
 
-	public void write(String path, InputStream inputStream) throws IOException {
-		ensureOpen();
+		this.ensureOpen();
+		if (!this.entries.add(resourcePath)) {
+			LOGGER.warn("skipping duplicate entry (path={})", resourcePath);
+			return;
+		}
 
-		this.outputStream.putNextEntry(new ZipEntry(path));
-		inputStream.transferTo(this.outputStream);
-		this.entries.add(path);
+		this.outputStream.putNextEntry(new ZipEntry(path(resourcePath)));
+
+		if (data instanceof InputStream inputStream) {
+			inputStream.transferTo(this.outputStream);
+		} else if (data instanceof JsonElement jsonElement) {
+			this.outputStream.write(GsonHelper.GSON.toJson(jsonElement).getBytes(StandardCharsets.UTF_8));
+		} else if (data instanceof RenderedImage image) {
+			ImageIO.write(image, "png", this.outputStream);
+		} else {
+			throw new IllegalArgumentException("unsupported data type: " + data.getClass());
+		}
+
 		this.outputStream.closeEntry();
 	}
 
-	public void write(String path, JsonElement json) throws IOException {
-		ensureOpen();
+	private void writeMetadata(JsonObject json) throws IOException {
+		this.ensureOpen();
 
-		this.outputStream.putNextEntry(new ZipEntry(path));
+		this.outputStream.putNextEntry(new ZipEntry("pack.mcmeta"));
 		this.outputStream.write(GsonHelper.GSON.toJson(json).getBytes(StandardCharsets.UTF_8));
-		this.entries.add(path);
 		this.outputStream.closeEntry();
 	}
 
-	public void write(String path, BufferedImage image) throws IOException {
-		ensureOpen();
-
-		this.outputStream.putNextEntry(new ZipEntry(path));
-		ImageIO.write(image, "png", this.outputStream);
-		this.entries.add(path);
-		this.outputStream.closeEntry();
-	}
-
-	public void writeFont(String path, List<Font.GlyphProvider> glyphProviders) throws IOException {
+	public void writeFont(ResourcePath resourcePath, List<Font.GlyphProvider> glyphProviders) throws IOException {
 		JsonObject font = new JsonObject();
 		font.add("providers", GsonHelper.GSON.toJsonTree(glyphProviders));
-		write(path, font);
+		write(resourcePath, font);
 	}
 
 	public void writeMetadata(int format, BaseComponent...description) throws IOException {
@@ -81,7 +94,7 @@ public class ResourcePackBuilder {
 		pack.addProperty("pack_format", format);
 		pack.add("description", JsonParser.parseString(ComponentSerializer.toString(description)));
 		root.add("pack", pack);
-		write("pack.mcmeta", root);
+		writeMetadata(root);
 	}
 
 	public void writeMetadata(int format, String description) throws IOException {
@@ -90,7 +103,7 @@ public class ResourcePackBuilder {
 		pack.addProperty("pack_format", format);
 		pack.addProperty("description", description);
 		root.add("pack", pack);
-		write("pack.mcmeta", root);
+		writeMetadata(root);
 	}
 
 	@SuppressWarnings("deprecation")

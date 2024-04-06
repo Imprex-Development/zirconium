@@ -15,22 +15,22 @@ import java.util.regex.Pattern;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import com.google.gson.JsonArray;
-import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import dev.imprex.zirconium.context.SourceContext;
-import dev.imprex.zirconium.context.SourceContextFileVisitor;
+import dev.imprex.zirconium.context.SourceContextEntryVisitor;
 import dev.imprex.zirconium.resources.Font.Glyph;
+import dev.imprex.zirconium.service.MojangGameFileService;
+import dev.imprex.zirconium.util.ResourcePath;
 
-public class Language implements SourceContextFileVisitor {
+public class Language implements SourceContextEntryVisitor {
 
 	private static final Logger LOGGER = LogManager.getLogger(Language.class);
 	private static final Pattern NAMESPACE_PATTERN = Pattern.compile("\\{\\{([^\\{\\}]+)\\}\\}");
 
-	private static String getPath(String languageCode) {
-		return String.format("assets/minecraft/lang/%s.json", languageCode);
+	private static ResourcePath path(String languageCode) {
+		return ResourcePath.minecraft(String.format("lang/%s.json", languageCode));
 	}
 
 	private final ResourcePackBuilder resourcePackBuilder;
@@ -41,19 +41,11 @@ public class Language implements SourceContextFileVisitor {
 
 	private boolean finalized = false;
 
-	public Language(ResourcePackBuilder resourcePackBuilder, Font font) {
+	public Language(ResourcePackBuilder resourcePackBuilder, Font font, MojangGameFileService mojangGameFileService) {
 		this.resourcePackBuilder = resourcePackBuilder;
 		this.font = font;
 
-		try (InputStream inputStream = getClass().getResourceAsStream("/assets/lang_codes.json")) {
-			JsonArray root = (JsonArray) JsonParser
-					.parseReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8));
-			for (JsonElement element : root) {
-				this.languageCodes.add(element.getAsString());
-			}
-		} catch (IOException e) {
-			throw new RuntimeException("unable to load default languages!", e);
-		}
+		this.languageCodes.addAll(mojangGameFileService.getLanguages());
 	}
 
 	public void finalizeLanguage() throws IOException {
@@ -67,7 +59,7 @@ public class Language implements SourceContextFileVisitor {
 			for (Map.Entry<String, Translation> translation : language.getValue().entrySet()) {
 				root.addProperty(translation.getKey(), translation.getValue().translation());
 			}
-			this.resourcePackBuilder.write(getPath(language.getKey()), root);
+			this.resourcePackBuilder.write(path(language.getKey()), root);
 		}
 	}
 
@@ -75,7 +67,7 @@ public class Language implements SourceContextFileVisitor {
 	public void visit(SourceContext context, Path path) throws IOException {
 		if (this.finalized) {
 			throw new IllegalStateException("already finalized!");
-		} else if (!path.toString().endsWith(".lang.json")) {
+		} else if (!path.getFileName().toString().endsWith(".lang.json")) {
 			return;
 		}
 

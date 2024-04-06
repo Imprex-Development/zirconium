@@ -10,5 +10,5 @@ public interface SourceContext {
 
 	InputStream getInputStream(Path path) throws IOException;
 
-	void visit(SourceContextFileVisitor visitor) throws IOException;
+	void visit(SourceContextEntryVisitor visitor) throws IOException;
 }

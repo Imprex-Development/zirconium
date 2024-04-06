@@ -22,16 +22,18 @@ import javax.imageio.ImageIO;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 
 import dev.imprex.zirconium.context.SourceContext;
-import dev.imprex.zirconium.context.SourceContextFileVisitor;
+import dev.imprex.zirconium.context.SourceContextEntryVisitor;
 import dev.imprex.zirconium.util.GsonHelper;
-import dev.imprex.zirconium.util.ResourceKey;
+import dev.imprex.zirconium.util.ResourcePath;
 import net.md_5.bungee.api.chat.BaseComponent;
 import net.md_5.bungee.api.chat.TextComponent;
 
-public class Font implements SourceContextFileVisitor {
+public class Font implements SourceContextEntryVisitor {
 
 	private static final Logger LOGGER = LogManager.getLogger(Font.class);
 
@@ -77,7 +79,7 @@ public class Font implements SourceContextFileVisitor {
 	private final ResourcePackBuilder resourcePackBuilder;
 
 	private final List<GlyphProvider> glyphProviders = new ArrayList<>();
-	private final Map<ResourceKey, Glyph> glyphs = new HashMap<>();
+	private final Map<ResourcePath, Glyph> glyphs = new HashMap<>();
 
 	private char nextCharacter = '\uE040';
 	private boolean finalized = false;
@@ -88,29 +90,26 @@ public class Font implements SourceContextFileVisitor {
 	}
 
 	private void registerOffsetCharacters() {
+		Map<Character, Float> advances = new HashMap<>();
+
 		for (int bit = 0; bit < OFFSET_BITS; bit++) {
-			int negativeHeight = -(1 << bit) - 2;
+			int negativeOffset = -(1 << bit);
 			char negativeOffsetChar = (char) (OFFSET_BASE_CHAR + bit);
-			this.glyphProviders.add(GlyphProvider.from(negativeHeight, negativeOffsetChar));
+			advances.put(negativeOffsetChar, (float) negativeOffset);
 
-			int positiveHeight = (1 << bit) - 1;
+			int positiveOffset = (1 << bit);
 			char positiveOffsetChar = (char) (OFFSET_BASE_CHAR + OFFSET_BITS + bit);
-			this.glyphProviders.add(GlyphProvider.from(positiveHeight, positiveOffsetChar));
+			advances.put(positiveOffsetChar, (float) positiveOffset);
 		}
 
-		try {
-			this.resourcePackBuilder.write("assets/zirconium/textures/offset.png",
-					getClass().getResourceAsStream("/assets/offset.png"));
-		} catch (IOException e) {
-			throw new RuntimeException("can't register offset characters", e);
-		}
+		this.glyphProviders.add(SpaceProvider.from(advances));
 	}
 
 	public Glyph getGlyph(String key) {
-		return getGlyph(ResourceKey.fromString(key));
+		return getGlyph(ResourcePath.fromString(key));
 	}
 
-	public Glyph getGlyph(ResourceKey key) {
+	public Glyph getGlyph(ResourcePath key) {
 		Glyph glyph = this.glyphs.get(key);
 		if (glyph == null) {
 			throw new NullPointerException("can't find glyph: " + key);
@@ -118,14 +117,14 @@ public class Font implements SourceContextFileVisitor {
 		return glyph;
 	}
 
-	public BaseComponent getComponent(ResourceKey key) {
+	public BaseComponent getComponent(ResourcePath key) {
 		return getComponent(key, 0);
 	}
 
-	public BaseComponent getComponent(ResourceKey key, int offse) {
+	public BaseComponent getComponent(ResourcePath key, int offset) {
 		Glyph glyph = Objects.requireNonNull(getGlyph(key), key.toString());
 
-		BaseComponent component = new TextComponent(glyph.character + getOffsetString(offse));
+		BaseComponent component = new TextComponent(glyph.character + getOffsetString(offset));
 		component.setFont("minecraft:default");
 		return component;
 	}
@@ -136,8 +135,21 @@ public class Font implements SourceContextFileVisitor {
 		}
 		
 		this.finalized = true;
-		this.resourcePackBuilder.writeFont("assets/minecraft/font/default.json", this.glyphProviders);
-		System.out.println(this.glyphs.keySet().stream().map(ResourceKey::toString).collect(Collectors.joining("\n")));
+		this.resourcePackBuilder.writeFont(ResourcePath.minecraft("font/default.json"), this.glyphProviders);
+
+		JsonObject atlas = new JsonObject();
+		JsonArray sources = new JsonArray();
+		atlas.add("sources", sources);
+		JsonObject directory = new JsonObject();
+		sources.add(directory);
+		directory.addProperty("type", "directory");
+		directory.addProperty("source", "custom");
+		directory.addProperty("prefix", "custom/");
+
+		this.resourcePackBuilder.write(ResourcePath.fromString("streamevent:atlases/blocks.json"), atlas);
+		this.resourcePackBuilder.write(ResourcePath.fromString("trade_menu:atlases/blocks.json"), atlas);
+		
+		System.out.println(this.glyphs.keySet().stream().map(ResourcePath::toString).collect(Collectors.joining("\n")));
 	}
 
 	@Override
@@ -150,12 +162,12 @@ public class Font implements SourceContextFileVisitor {
 
 		LOGGER.info("found font file {} in {}", path, context);
 
-		try (InputStream inputStream = context.getInputStream(path)) {
-			Type listType = new TypeToken<List<Texture>>() {
-			}.getType();
-			List<Texture> json = GsonHelper.GSON.fromJson(new InputStreamReader(inputStream, StandardCharsets.UTF_8), listType);
-			for (Texture texture : json) {
+		try (InputStream inputStream = context.getInputStream(path);
+			 InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8)) {
+			Type listType = new TypeToken<List<Texture>>() {}.getType();
+			List<Texture> json = GsonHelper.GSON.fromJson(reader, listType);
 
+			for (Texture texture : json) {
 				Path textureFile = getPath(texture.file);
 				if (!context.has(textureFile)) {
 					new IOException("can't find texture file: " + textureFile).printStackTrace();
@@ -165,10 +177,8 @@ public class Font implements SourceContextFileVisitor {
 				try (InputStream textureStream = context.getInputStream(textureFile)) {
 					BufferedImage image = ImageIO.read(textureStream);
 		
-					String resourcePackPath = textureFile.toString();
-					if (!this.resourcePackBuilder.hasEntry(resourcePackPath)) {
-						this.resourcePackBuilder.write(resourcePackPath, image);
-					}
+					ResourcePath resourcePath = getResourcePath(texture.file);
+					this.resourcePackBuilder.write(resourcePath, image);
 
 					this.registerTexture(texture, image);
 				}
@@ -176,8 +186,12 @@ public class Font implements SourceContextFileVisitor {
 		}
 	}
 
-	private static Path getPath(ResourceKey key) {
-		return Paths.get(String.format("assets/%s/textures/%s", key.getNamespace(), key.getKey()));
+	private static Path getPath(ResourcePath key) {
+		return Paths.get(String.format("assets/%s/textures/%s", key.namespace(), key.path()));
+	}
+
+	private static ResourcePath getResourcePath(ResourcePath key) {
+		return ResourcePath.fromString(String.format("%s:textures/custom/%s", key.namespace(), key.path()));
 	}
 
 	private void registerTexture(Texture texture, BufferedImage image) {
@@ -200,7 +214,7 @@ public class Font implements SourceContextFileVisitor {
 		String glyphString = getGlyphString(glyphCharacters);
 
 		Glyph glyph = new Glyph(glyphString, glyphWidth, texture.height, texture.ascent);
-		GlyphProvider glyphProvider = GlyphProvider.from(texture, new String(glyphCharacters));
+		BitmapProvider glyphProvider = BitmapProvider.from(texture, new String(glyphCharacters));
 
 		this.glyphProviders.add(glyphProvider);
 		this.glyphs.put(texture.name, glyph);
@@ -229,7 +243,7 @@ public class Font implements SourceContextFileVisitor {
 				String glyphString = getGlyphString(glyphCharacters);
 
 				Glyph glyph = new Glyph(glyphString, glyphWidth, texture.height, texture.ascent);
-				ResourceKey name = ResourceKey.fromString(texture.name + "/" + texture.grid[rowIndex][columnIndex]);
+				ResourcePath name = ResourcePath.fromString(texture.name + "/" + texture.grid[rowIndex][columnIndex]);
 
 				row.append(glyphCharacters);
 				this.glyphs.put(name, glyph);
@@ -238,7 +252,7 @@ public class Font implements SourceContextFileVisitor {
 			chars[rowIndex] = row.toString();
 		}
 
-		this.glyphProviders.add(GlyphProvider.from(texture, chars));
+		this.glyphProviders.add(BitmapProvider.from(texture, chars));
 	}
 
 	private char[] getGlyphCharacters(int width) {
@@ -281,20 +295,29 @@ public class Font implements SourceContextFileVisitor {
 		return 1;
 	}
 
-	public record GlyphProvider(String type, String file, int ascent, int height, String... chars) {
+	public sealed interface GlyphProvider permits SpaceProvider, BitmapProvider {}
 
-		public static GlyphProvider from(int height, char character) {
-			return new GlyphProvider("bitmap", "zirconium:offset.png", -32768, height,
+	public record SpaceProvider(String type, Map<Character, Float> advances) implements GlyphProvider {
+
+		public static SpaceProvider from(Map<Character, Float> advances) {
+			return new SpaceProvider("space", advances);
+		}
+	}
+
+	public record BitmapProvider(String type, String file, int ascent, int height, String... chars) implements GlyphProvider {
+
+		public static BitmapProvider from(int height, char character) {
+			return new BitmapProvider("bitmap", "zirconium:custom/offset.png", -32768, height,
 					new String[] { Character.toString(character) });
 		}
 
-		public static GlyphProvider from(Texture texture, String chars) {
-			return new GlyphProvider("bitmap", texture.file.toString(), texture.ascent, texture.height,
+		public static BitmapProvider from(Texture texture, String chars) {
+			return new BitmapProvider("bitmap", String.format("%s:custom/%s", texture.file.namespace(), texture.file.path()), texture.ascent, texture.height,
 					new String[] { chars });
 		}
 
-		public static GlyphProvider from(Texture texture, String[] chars) {
-			return new GlyphProvider("bitmap", texture.file.toString(), texture.ascent, texture.height, chars);
+		public static BitmapProvider from(Texture texture, String[] chars) {
+			return new BitmapProvider("bitmap", String.format("%s:custom/%s", texture.file.namespace(), texture.file.path()), texture.ascent, texture.height, chars);
 		}
 	}
 
@@ -303,8 +326,8 @@ public class Font implements SourceContextFileVisitor {
 
 	private class Texture {
 
-		public ResourceKey name;
-		public ResourceKey file;
+		public ResourcePath name;
+		public ResourcePath file;
 
 		public int ascent;
 		public int height;

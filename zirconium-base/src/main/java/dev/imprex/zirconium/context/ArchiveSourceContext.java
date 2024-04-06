@@ -71,7 +71,7 @@ public class ArchiveSourceContext implements SourceContext, AutoCloseable {
 		return this.zipFile.getInputStream(zipEntry);
 	}
 
-	public void visit(SourceContextFileVisitor visitor) throws IOException {
+	public void visit(SourceContextEntryVisitor visitor) throws IOException {
 		this.ensureOpen();
 
 		for (Path path : this.zipEntries.keySet()) {

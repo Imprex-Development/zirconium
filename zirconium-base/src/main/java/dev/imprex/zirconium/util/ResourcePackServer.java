@@ -1,5 +1,7 @@
 package dev.imprex.zirconium.util;
 
+import java.util.concurrent.ExecutionException;
+
 import dev.imprex.zirconium.resources.ResourcePackBuilder.ResourcePack;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.Unpooled;
@@ -75,6 +77,10 @@ public class ResourcePackServer extends SimpleChannelInboundHandler<FullHttpRequ
 	}
 
 	public void close() {
-		this.channel.close().syncUninterruptibly();
+		try {
+			this.channel.close().syncUninterruptibly().get();
+		} catch (InterruptedException | ExecutionException e) {
+			e.printStackTrace();
+		}
 	}
 }

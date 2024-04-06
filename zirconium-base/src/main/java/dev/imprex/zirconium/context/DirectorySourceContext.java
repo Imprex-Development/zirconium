@@ -56,7 +56,7 @@ public class DirectorySourceContext implements SourceContext {
 	}
 
 	@Override
-	public void visit(SourceContextFileVisitor visitor) throws IOException {
+	public void visit(SourceContextEntryVisitor visitor) throws IOException {
 		for (Path entry : this.entries) {
 			visitor.visit(this, entry);
 		}

@@ -12,15 +12,17 @@ import dev.imprex.zirconium.resources.Font;
 import dev.imprex.zirconium.resources.Language;
 import dev.imprex.zirconium.resources.ResourcePackBuilder;
 import dev.imprex.zirconium.resources.ResourcePackBuilder.ResourcePack;
+import dev.imprex.zirconium.service.MojangGameFileService;
 import dev.imprex.zirconium.util.ResourcePackServer;
 import net.md_5.bungee.api.chat.TextComponent;
 
 public class Zirconium {
 
 	private final ResourcePackBuilder resourcePackBuilder = new ResourcePackBuilder();
+	private final MojangGameFileService mojangGameFileService = new MojangGameFileService();
 
 	private final Font font = new Font(this.resourcePackBuilder);
-	private final Language language = new Language(this.resourcePackBuilder, this.font);
+	private final Language language = new Language(this.resourcePackBuilder, this.font, this.mojangGameFileService);
 
 	private ResourcePack resourcePack;
 	private ResourcePackServer resourcePackServer;
@@ -84,7 +86,8 @@ public class Zirconium {
 			this.font.finalizeFont();
 			this.language.finalizeLanguage();
 
-			this.resourcePackBuilder.writeMetadata(9, TextComponent.fromLegacyText("§l§8[§rZirconium§l§8] §r§7Server-Pack"));
+			this.resourcePackBuilder.writeMetadata(22, TextComponent
+					.fromLegacyText("\u00A7l\u00A78[\u00A7rZirconium\u00A7l\u00A78] \u00A7r\u00A77Server-Pack"));
 
 			ResourcePack resourcePack = this.resourcePackBuilder.build();
 			Files.write(Paths.get("debug.zip"), resourcePack.data());
