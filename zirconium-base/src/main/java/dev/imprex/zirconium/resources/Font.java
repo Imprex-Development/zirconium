@@ -143,8 +143,8 @@ public class Font implements SourceContextEntryVisitor {
 		JsonObject directory = new JsonObject();
 		sources.add(directory);
 		directory.addProperty("type", "directory");
-		directory.addProperty("source", "custom");
-		directory.addProperty("prefix", "custom/");
+		directory.addProperty("source", "zirconium");
+		directory.addProperty("prefix", "zirconium/");
 
 		this.resourcePackBuilder.write(ResourcePath.fromString("streamevent:atlases/blocks.json"), atlas);
 		this.resourcePackBuilder.write(ResourcePath.fromString("trade_menu:atlases/blocks.json"), atlas);
@@ -191,7 +191,7 @@ public class Font implements SourceContextEntryVisitor {
 	}
 
 	private static ResourcePath getResourcePath(ResourcePath key) {
-		return ResourcePath.fromString(String.format("%s:textures/custom/%s", key.namespace(), key.path()));
+		return ResourcePath.fromString(String.format("%s:textures/zirconium/%s", key.namespace(), key.path()));
 	}
 
 	private void registerTexture(Texture texture, BufferedImage image) {
@@ -304,20 +304,15 @@ public class Font implements SourceContextEntryVisitor {
 		}
 	}
 
-	public record BitmapProvider(String type, String file, int ascent, int height, String... chars) implements GlyphProvider {
-
-		public static BitmapProvider from(int height, char character) {
-			return new BitmapProvider("bitmap", "zirconium:custom/offset.png", -32768, height,
-					new String[] { Character.toString(character) });
-		}
+	public record BitmapProvider(String type, ResourcePath file, int ascent, int height, String... chars)
+			implements GlyphProvider {
 
 		public static BitmapProvider from(Texture texture, String chars) {
-			return new BitmapProvider("bitmap", String.format("%s:custom/%s", texture.file.namespace(), texture.file.path()), texture.ascent, texture.height,
-					new String[] { chars });
+			return from(texture, new String[] { chars });
 		}
 
 		public static BitmapProvider from(Texture texture, String[] chars) {
-			return new BitmapProvider("bitmap", String.format("%s:custom/%s", texture.file.namespace(), texture.file.path()), texture.ascent, texture.height, chars);
+			return new BitmapProvider("bitmap", texture.file.withPrefix("zirconium/"), texture.ascent, texture.height, chars);
 		}
 	}
 
