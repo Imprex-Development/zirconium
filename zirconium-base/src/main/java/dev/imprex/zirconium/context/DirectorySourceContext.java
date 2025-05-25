@@ -34,7 +34,7 @@ public class DirectorySourceContext implements SourceContext {
 			@Override
 			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
 				if (attrs.isRegularFile()) {
-					DirectorySourceContext.this.entries.add(file);
+					DirectorySourceContext.this.entries.add(directory.relativize(file));
 				}
 				return FileVisitResult.CONTINUE;
 			}
@@ -52,7 +52,7 @@ public class DirectorySourceContext implements SourceContext {
 			throw new IOException("can't find entry: " + path);
 		}
 
-		return Files.newInputStream(path);
+		return Files.newInputStream(this.directory.resolve(path));
 	}
 
 	@Override

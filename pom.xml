@@ -19,8 +19,8 @@
 		<project.version.target>17</project.version.target>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
-		<dependency.bungee.version>1.19-R0.1-SNAPSHOT</dependency.bungee.version>
-		<dependency.bukkit.version>1.19.2-R0.1-SNAPSHOT</dependency.bukkit.version>
+		<dependency.bungee.version>1.21-R0.2</dependency.bungee.version>
+		<dependency.bukkit.version>1.21.4-R0.1-SNAPSHOT</dependency.bukkit.version>
 		<dependency.log4j.version>2.17.0</dependency.log4j.version>
 		<dependency.netty.version>4.1.77.Final</dependency.netty.version>
 

@@ -15,7 +15,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 import javax.imageio.ImageIO;
 
@@ -148,8 +147,6 @@ public class Font implements SourceContextEntryVisitor {
 
 		this.resourcePackBuilder.write(ResourcePath.fromString("streamevent:atlases/blocks.json"), atlas);
 		this.resourcePackBuilder.write(ResourcePath.fromString("trade_menu:atlases/blocks.json"), atlas);
-		
-		System.out.println(this.glyphs.keySet().stream().map(ResourcePath::toString).collect(Collectors.joining("\n")));
 	}
 
 	@Override
@@ -211,7 +208,7 @@ public class Font implements SourceContextEntryVisitor {
 		int glyphWidth = (int) (0.5D + (double) ((float) actualWidth * scale)) + 1;
 
 		char[] glyphCharacters = getGlyphCharacters(width);
-		String glyphString = getGlyphString(glyphCharacters);
+		String glyphString = getGlyphString(image, width, height, scale, glyphCharacters);
 
 		Glyph glyph = new Glyph(glyphString, glyphWidth, texture.height, texture.ascent);
 		BitmapProvider glyphProvider = BitmapProvider.from(texture, new String(glyphCharacters));
@@ -240,7 +237,7 @@ public class Font implements SourceContextEntryVisitor {
 				int glyphWidth = (int) (0.5D + (double) ((float) actualWidth * scale)) + 1;
 
 				char[] glyphCharacters = getGlyphCharacters(gridWidth);
-				String glyphString = getGlyphString(glyphCharacters);
+				String glyphString = getGlyphString(image, gridWidth, gridHeight, scale, glyphCharacters);
 
 				Glyph glyph = new Glyph(glyphString, glyphWidth, texture.height, texture.ascent);
 				ResourcePath name = ResourcePath.fromString(texture.name + "/" + texture.grid[rowIndex][columnIndex]);
@@ -256,7 +253,7 @@ public class Font implements SourceContextEntryVisitor {
 	}
 
 	private char[] getGlyphCharacters(int width) {
-		char[] chars = new char[(width / 256) + 1];
+		char[] chars = new char[(width + 255) / 256];
 
 		for (int i = 0; i < chars.length; i++) {
 			chars[i] = this.nextCharacter++;
@@ -265,15 +262,20 @@ public class Font implements SourceContextEntryVisitor {
 		return chars;
 	}
 
-	private String getGlyphString(char[] chars) {
-		StringBuilder glyphString = new StringBuilder((chars.length * 2) - 1);
+	private String getGlyphString(BufferedImage image, int width, int height, float scale, char[] chars) {
+		StringBuilder glyphString = new StringBuilder(chars.length * 2);
 
-		for (int i = 0; i < chars.length - 1; i++) {
-			glyphString.append(chars[i]);
-			glyphString.append(Font.getOffsetString(-1));
+		int glyphWidth = width / chars.length;
+
+		for (int idx = 0; idx < chars.length; idx++) {
+			int actualWidth = getActualGlyphWidth(image, glyphWidth, height, idx, 0);
+
+			int advance = (int) (0.5D + (double) ((float) actualWidth * scale)) + 1;
+			int padding = (int)(actualWidth * scale) - advance;
+
+			glyphString.append(chars[idx]);
+			glyphString.append(Font.getOffsetString(padding));
 		}
-
-		glyphString.append(chars[chars.length - 1]);
 
 		return new String(glyphString);
 	}
