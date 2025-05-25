@@ -1,28 +1,18 @@
 package dev.imprex.zirconium.util;
 
-import java.io.IOException;
-
+import com.google.gson.FieldNamingPolicy;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
-import com.google.gson.TypeAdapter;
-import com.google.gson.stream.JsonReader;
-import com.google.gson.stream.JsonWriter;
+
+import dev.imprex.zirconium.gui.font.providers.GlyphProvider;
+import dev.imprex.zirconium.gui.font.providers.GlyphProviderDefinition;
 
 public class GsonHelper {
 
-	public static final Gson GSON = new GsonBuilder().setPrettyPrinting()
-			.registerTypeAdapter(ResourcePath.class, new TypeAdapter<ResourcePath>() {
-
-				@Override
-				public void write(JsonWriter out, ResourcePath value) throws IOException {
-					out.value(value.toString());
-				}
-
-				@Override
-				public ResourcePath read(JsonReader in) throws IOException {
-					return ResourcePath.fromString(in.nextString());
-				}
-			})
+	public static final Gson GSON = new GsonBuilder()
+			.setPrettyPrinting()
+			.setFieldNamingPolicy(FieldNamingPolicy.LOWER_CASE_WITH_UNDERSCORES)
+			.registerTypeAdapter(GlyphProviderDefinition.class, GlyphProvider.DESERIALIZER)
+			.registerTypeAdapter(ResourcePath.class, ResourcePath.TYPE_ADAPTER)
 			.create();
-
 }

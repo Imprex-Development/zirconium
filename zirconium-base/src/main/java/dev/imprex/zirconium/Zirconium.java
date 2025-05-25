@@ -12,14 +12,20 @@ import dev.imprex.zirconium.resources.Font;
 import dev.imprex.zirconium.resources.Language;
 import dev.imprex.zirconium.resources.ResourcePackBuilder;
 import dev.imprex.zirconium.resources.ResourcePackBuilder.ResourcePack;
+import dev.imprex.zirconium.service.HttpService;
 import dev.imprex.zirconium.service.MojangGameFileService;
+import dev.imprex.zirconium.service.ResourceProviderService;
 import dev.imprex.zirconium.util.ResourcePackServer;
 import net.md_5.bungee.api.chat.TextComponent;
 
 public class Zirconium {
 
+	private final Path basePath = Paths.get(".bin/");
 	private final ResourcePackBuilder resourcePackBuilder = new ResourcePackBuilder();
-	private final MojangGameFileService mojangGameFileService = new MojangGameFileService();
+
+	private final HttpService httpService = new HttpService(basePath.resolve(".cache/"));
+	private final MojangGameFileService mojangGameFileService = new MojangGameFileService(httpService);
+	private final ResourceProviderService resourceProvider = new ResourceProviderService(mojangGameFileService, basePath.resolve(".assets/"));
 
 	private final Font font = new Font(this.resourcePackBuilder);
 	private final Language language = new Language(this.resourcePackBuilder, this.font, this.mojangGameFileService);

@@ -1,92 +1,141 @@
 package dev.imprex.zirconium.service;
 
 import java.io.IOException;
-import java.net.http.HttpResponse;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.Collections;
+import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
-public class MojangGameFileService extends AbstractHttpService {
+import dev.imprex.zirconium.util.GsonHelper;
+
+public class MojangGameFileService {
 
 	private static final String VERSION_INDEX_URI = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 	private static final String DOWNLOAD_BASE_URI = "https://resources.download.minecraft.net/%s/%s";
 
-	private final AtomicReference<CompletableFuture<JsonObject>> packMeta = new AtomicReference<>();
+	private static <T> Function<InputStream, T> json(Class<T> type) {
+		return (inputStream) -> {
+			try (InputStreamReader reader = new InputStreamReader(inputStream)) {
+				return GsonHelper.GSON.fromJson(reader, type);
+			} catch (IOException e) {
+				e.printStackTrace();
+				return null;
+			}
+		};
+	}
+
+	private static <T> Supplier<T> lazy(Supplier<T> supplier) {
+		return new Supplier<T>() {
+
+			private T result;
+
+			@Override
+			public T get() {
+				if (this.result == null) {
+					this.result = supplier.get();
+				}
+
+				return this.result;
+			}
+		};
+	}
+
+	private static <S, T> Supplier<Optional<T>> lazyOptionalChain(Supplier<Optional<S>> source, Function<S, Optional<T>> map) {
+		return lazy(() -> source.get().map(map).map(result -> result.orElse(null)));
+	}
+
+	private final HttpService http;
+
+	private Supplier<Optional<JsonObject>> version = lazy(this::requestLatestRelease);
+	private Supplier<Optional<JsonObject>> assetIndex = lazyOptionalChain(this.version, this::requestAssetIndex);
+	private Supplier<Optional<JsonObject>> packMcmeta = lazyOptionalChain(this.assetIndex, this::requestPackMcmeta);
+
+	public MojangGameFileService(HttpService http) {
+		this.http = http;
+	}
+
+	public Optional<JsonObject> getVersion() {
+		return version.get();
+	}
+
+	public Optional<JsonObject> getAssetIndex() {
+		return assetIndex.get();
+	}
+
+	public Optional<JsonObject> getPackMcmeta() {
+		return packMcmeta.get();
+	}
 
 	public Set<String> getLanguages() {
-		try {
-			return getPackMeta().thenApply(root -> {
-				return root.getAsJsonObject("language").keySet();
-			}).get();
-		} catch (InterruptedException | ExecutionException e) {
-			e.printStackTrace();
-			return Collections.emptySet();
-		}
+		return getPackMcmeta()
+				.map(response -> response.getAsJsonObject("language").keySet())
+				.orElse(Collections.emptySet());
 	}
 
-	public CompletableFuture<JsonObject> getPackMeta() {
-		if (packMeta.get() == null && packMeta.compareAndSet(null, new CompletableFuture<>())) {
-			CompletableFuture<JsonObject> future = packMeta.get();
-			requestPackMeta().whenComplete((result, throwable) -> {
-				if (throwable != null) {
-					future.completeExceptionally(throwable);
-				} else {
-					future.complete(result);
-				}
+	public Optional<InputStream> requestClientJar() {
+		return this.version.get()
+			.map(response -> {
+				String url = response
+						.getAsJsonObject("downloads")
+						.getAsJsonObject("client")
+						.getAsJsonPrimitive("url")
+						.getAsString();
+
+				return this.http.request(url).orElse(null);
 			});
-		}
-		return packMeta.get();
 	}
 
-	private CompletableFuture<JsonObject> requestPackMeta() {
-		// request version index
-		return HTTP.sendAsync(request(VERSION_INDEX_URI).build(), json(JsonObject.class))
-			// request version metadata
-			.thenCompose(response -> {
-				JsonObject root = response.body();
-				if (root == null) {
-					return CompletableFuture.failedStage(new IOException("response (versionIndex) is empty or missing"));
-				}
+	public Optional<InputStream> requestObject(String objectHash) {
+		String url = String.format(DOWNLOAD_BASE_URI, objectHash.substring(0, 2), objectHash);
+		return this.http.request(url);
+	}
 
-				String versionUrl = root.getAsJsonArray("versions")
-					.get(0).getAsJsonObject()
-					.getAsJsonPrimitive("url")
+	private Optional<JsonObject> requestLatestRelease() {
+		return this.http.request(VERSION_INDEX_URI)
+			.map(json(JsonObject.class))
+			.map(response -> {
+				String latestRelease = response
+					.getAsJsonObject("latest")
+					.get("release")
 					.getAsString();
 
-				return HTTP.sendAsync(request(versionUrl).build(), json(JsonObject.class));
-			})
-			// request asset index
-			.thenCompose(response -> {
-				JsonObject root = response.body();
-				if (root == null) {
-					return CompletableFuture.failedStage(new IOException("response (assetIndex) is empty or missing"));
+				for (JsonElement element : response.getAsJsonArray("versions")) {
+					JsonObject version = element.getAsJsonObject();
+					if (version.get("id").getAsString().equals(latestRelease)) {
+						return version.get("url").getAsString();
+					}
 				}
 
-				String assetIndexUrl = root.getAsJsonObject("assetIndex")
-					.getAsJsonPrimitive("url")
-					.getAsString();
-
-				return HTTP.sendAsync(request(assetIndexUrl).build(), json(JsonObject.class));
+				return null;
 			})
-			// request pack.mcmeta
-			.thenCompose(response -> {
-				JsonObject root = response.body();
-				if (root == null) {
-					return CompletableFuture.failedStage(new IOException("response (pack.mcmeta) is empty or missing"));
-				}
+			.map(uri -> this.http.request(uri).orElse(null))
+			.map(json(JsonObject.class));
+	}
 
-				String objectHash = root.getAsJsonObject("objects")
-					.getAsJsonObject("pack.mcmeta")
-					.getAsJsonPrimitive("hash")
-					.getAsString();
+	private Optional<JsonObject> requestAssetIndex(JsonObject version) {
+		String url = version
+				.getAsJsonObject("assetIndex")
+				.getAsJsonPrimitive("url")
+				.getAsString();
 
-				String url = String.format(DOWNLOAD_BASE_URI, objectHash.substring(0, 2), objectHash);
-				return HTTP.sendAsync(request(url).build(), json(JsonObject.class));
-			})
-			.thenApply(HttpResponse::body);
+		return this.http.request(url)
+				.map(json(JsonObject.class));
+	}
+
+	private Optional<JsonObject> requestPackMcmeta(JsonObject assetIndex) {
+		String objectHash = assetIndex
+				.getAsJsonObject("objects")
+				.getAsJsonObject("pack.mcmeta")
+				.getAsJsonPrimitive("hash")
+				.getAsString();
+
+		return requestObject(objectHash)
+				.map(json(JsonObject.class));
 	}
 }

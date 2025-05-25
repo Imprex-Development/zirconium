@@ -1,13 +1,30 @@
 package dev.imprex.zirconium.util;
 
+import java.io.IOException;
 import java.util.regex.Pattern;
 
 import com.google.common.base.Preconditions;
+import com.google.gson.TypeAdapter;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonWriter;
 
 /**
  * Modified version of spigot's NamespacedKey
  */
 public class ResourcePath {
+
+	public static final TypeAdapter<ResourcePath> TYPE_ADAPTER = new TypeAdapter<ResourcePath>() {
+
+		@Override
+		public void write(JsonWriter out, ResourcePath value) throws IOException {
+			out.value(value.toString());
+		}
+
+		@Override
+		public ResourcePath read(JsonReader in) throws IOException {
+			return ResourcePath.fromString(in.nextString());
+		}
+	};
 
 	public static final String MINECRAFT = "minecraft";
 
@@ -68,6 +85,18 @@ public class ResourcePath {
 
 	public String path() {
 		return this.path;
+	}
+
+	public ResourcePath withPath(String path) {
+		return new ResourcePath(this.namespace, path);
+	}
+
+	public ResourcePath withPrefix(String prefix) {
+		return this.withPath(prefix + this.path);
+	}
+
+	public ResourcePath withSuffix(String suffix) {
+		return this.withPath(this.path + suffix);
 	}
 
 	public int hashCode() {
